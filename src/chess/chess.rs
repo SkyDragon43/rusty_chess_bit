@@ -148,6 +148,10 @@ impl ChessBoard {
         // self.halfmove_clock = 0;
         // self.move_stack = vec![];
 
+        let active_team : Team;
+        let en_passant: u64;
+        let castling: u64;
+        let pieces: [ChessPiece; 64];
 
         let regex = Regex::new(r"^(?<ranks>(?:[pnbrqkPNBRQK1-8]{1,8}\/){7}[pnbrqkPNBRQK1-8]{1,8})\s+(?<turn>b|w)\s+(?<castle>-|[K|Q|k|q]{1,4})\s+(?<en_passant>-|[a-h][36])\s+(?<half_moves>\d+)\s+(?<full_moves>\d+)$").unwrap();
 
@@ -162,11 +166,6 @@ impl ChessBoard {
         let en_passant_string = capture.name("en_passant").unwrap().as_str();
         let half_moves_string = capture.name("half_moves").unwrap().as_str();
         let full_moves_string = capture.name("full_moves").unwrap().as_str();
-
-        //println!("RANK IS: '{}'", rank_string);
-
-        //self.data = [ChessPiece::from_id(0); BOARD_WIDTH * BOARD_HEIGHT];
-        self.clear();
         
         {
             let mut data = [ChessPiece::None; 64];
@@ -213,14 +212,12 @@ impl ChessBoard {
                 }
             }
 
-            for i in 0..64 {
-                self.set_piece(data[i], i as u8);
-            }
+            pieces = data;
         }
 
         match turn_string {
-            "w" => self.active_team = Team::White,
-            "b" => self.active_team = Team::Black,
+            "w" => active_team = Team::White,
+            "b" => active_team = Team::Black,
             _ => panic!("Invalid")
         }
 
@@ -240,10 +237,10 @@ impl ChessBoard {
 
 
         match en_passant_string {
-            "-" => self.en_passant = 0,
+            "-" => en_passant = 0,
             _ =>
                 match index_from_string(en_passant_string) {
-                    Some(i) => self.en_passant |= 1 << i,
+                    Some(i) => en_passant = 1 << i,
                     None => panic!("Invalid En Passant String"),
                 }
         }
@@ -254,6 +251,14 @@ impl ChessBoard {
         if halfmoves.is_err() || fullmoves.is_err() {
             return Err("Invalid half or full moves");
         }
+
+
+        self.clear();
+        for i in 0..64 {
+            self.set_piece(pieces[i], i as u8);
+        }
+        self.en_passant = en_passant;
+        self.active_team = active_team;
         self.half_clock = halfmoves.unwrap();
         self.full_count = fullmoves.unwrap();
 
@@ -343,7 +348,7 @@ impl Display for ChessBoard {
 
         
 
-        
+        write!(f, "{}  {:^11}{:^11}{:^11}\n", offset, "", "Chess","").unwrap();
         if !file_on_bottom {
             write!(f, "{}", file_string)?;
         }
