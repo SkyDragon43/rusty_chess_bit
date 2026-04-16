@@ -24,40 +24,14 @@ pub const RANKS: [u64; 8] = [RANK_1, RANK_2, RANK_3, RANK_4, RANK_5, RANK_6, RAN
  *  1 0 0 0
  * Top left is zero
  */
-pub const DIAGONAL_0: u64 = 0x0000000000000001;
-pub const DIAGONAL_1: u64 = DIAGONAL_0 << 1 | DIAGONAL_0 << 8;
-pub const DIAGONAL_2: u64 = DIAGONAL_1 << 1 | DIAGONAL_1 << 8;
-pub const DIAGONAL_3: u64 = DIAGONAL_2 << 1 | DIAGONAL_2 << 8;
-pub const DIAGONAL_4: u64 = DIAGONAL_3 << 1 | DIAGONAL_3 << 8;
-pub const DIAGONAL_5: u64 = DIAGONAL_4 << 1 | DIAGONAL_4 << 8;
-pub const DIAGONAL_6: u64 = DIAGONAL_5 << 1 | DIAGONAL_5 << 8;
-pub const DIAGONAL_7: u64 = DIAGONAL_6 << 1 | DIAGONAL_6 << 8;
-pub const DIAGONAL_8: u64 = DIAGONAL_7 << 8;
-pub const DIAGONAL_9: u64 = DIAGONAL_8 << 8;
-pub const DIAGONAL_10: u64 = DIAGONAL_9 << 8;
-pub const DIAGONAL_11: u64 = DIAGONAL_10 << 8;
-pub const DIAGONAL_12: u64 = DIAGONAL_11 << 8;
-pub const DIAGONAL_13: u64 = DIAGONAL_12 << 8;
-pub const DIAGONAL_14: u64 = DIAGONAL_13 << 8;
-pub const DIAGONALS: [u64; 15] = 
-    [DIAGONAL_0, DIAGONAL_1, DIAGONAL_2, DIAGONAL_3, DIAGONAL_4, DIAGONAL_5, DIAGONAL_6, DIAGONAL_7, 
-     DIAGONAL_8, DIAGONAL_9, DIAGONAL_10, DIAGONAL_11, DIAGONAL_12, DIAGONAL_13, DIAGONAL_14];
-
-/**
- *  1 0 0 0
- *  0 1 0 0
- *  0 0 1 0
- *  0 0 0 1
- * Top left is zero
- */
-pub const ANTI_DIAGONAL_0: u64 = 0x0000000000000080;
-pub const ANTI_DIAGONAL_1: u64 = ANTI_DIAGONAL_0 << 8 | ANTI_DIAGONAL_0 >> 1;
-pub const ANTI_DIAGONAL_2: u64 = ANTI_DIAGONAL_1 << 8 | ANTI_DIAGONAL_1 >> 1;
-pub const ANTI_DIAGONAL_3: u64 = ANTI_DIAGONAL_2 << 8 | ANTI_DIAGONAL_2 >> 1;
-pub const ANTI_DIAGONAL_4: u64 = ANTI_DIAGONAL_3 << 8 | ANTI_DIAGONAL_3 >> 1;
-pub const ANTI_DIAGONAL_5: u64 = ANTI_DIAGONAL_4 << 8 | ANTI_DIAGONAL_4 >> 1;
-pub const ANTI_DIAGONAL_6: u64 = ANTI_DIAGONAL_5 << 8 | ANTI_DIAGONAL_5 >> 1;
-pub const ANTI_DIAGONAL_7: u64 = ANTI_DIAGONAL_6 << 8 | ANTI_DIAGONAL_6 >> 1;
+pub const ANTI_DIAGONAL_0: u64 = 0x0000000000000001;
+pub const ANTI_DIAGONAL_1: u64 = ANTI_DIAGONAL_0 << 1 | ANTI_DIAGONAL_0 << 8;
+pub const ANTI_DIAGONAL_2: u64 = ANTI_DIAGONAL_1 << 1 | ANTI_DIAGONAL_1 << 8;
+pub const ANTI_DIAGONAL_3: u64 = ANTI_DIAGONAL_2 << 1 | ANTI_DIAGONAL_2 << 8;
+pub const ANTI_DIAGONAL_4: u64 = ANTI_DIAGONAL_3 << 1 | ANTI_DIAGONAL_3 << 8;
+pub const ANTI_DIAGONAL_5: u64 = ANTI_DIAGONAL_4 << 1 | ANTI_DIAGONAL_4 << 8;
+pub const ANTI_DIAGONAL_6: u64 = ANTI_DIAGONAL_5 << 1 | ANTI_DIAGONAL_5 << 8;
+pub const ANTI_DIAGONAL_7: u64 = ANTI_DIAGONAL_6 << 1 | ANTI_DIAGONAL_6 << 8;
 pub const ANTI_DIAGONAL_8: u64 = ANTI_DIAGONAL_7 << 8;
 pub const ANTI_DIAGONAL_9: u64 = ANTI_DIAGONAL_8 << 8;
 pub const ANTI_DIAGONAL_10: u64 = ANTI_DIAGONAL_9 << 8;
@@ -69,7 +43,44 @@ pub const ANTI_DIAGONALS: [u64; 15] =
     [ANTI_DIAGONAL_0, ANTI_DIAGONAL_1, ANTI_DIAGONAL_2, ANTI_DIAGONAL_3, ANTI_DIAGONAL_4, ANTI_DIAGONAL_5, ANTI_DIAGONAL_6, ANTI_DIAGONAL_7, 
      ANTI_DIAGONAL_8, ANTI_DIAGONAL_9, ANTI_DIAGONAL_10, ANTI_DIAGONAL_11, ANTI_DIAGONAL_12, ANTI_DIAGONAL_13, ANTI_DIAGONAL_14];
 
+/**
+ *  1 0 0 0
+ *  0 1 0 0
+ *  0 0 1 0
+ *  0 0 0 1
+ * Top left is zero
+ */
+pub const DIAGONAL_0: u64 = 0x0000000000000080;
+pub const DIAGONAL_1: u64 = DIAGONAL_0 << 8 | DIAGONAL_0 >> 1;
+pub const DIAGONAL_2: u64 = DIAGONAL_1 << 8 | DIAGONAL_1 >> 1;
+pub const DIAGONAL_3: u64 = DIAGONAL_2 << 8 | DIAGONAL_2 >> 1;
+pub const DIAGONAL_4: u64 = DIAGONAL_3 << 8 | DIAGONAL_3 >> 1;
+pub const DIAGONAL_5: u64 = DIAGONAL_4 << 8 | DIAGONAL_4 >> 1;
+pub const DIAGONAL_6: u64 = DIAGONAL_5 << 8 | DIAGONAL_5 >> 1;
+pub const DIAGONAL_7: u64 = DIAGONAL_6 << 8 | DIAGONAL_6 >> 1;
+pub const DIAGONAL_8: u64 = DIAGONAL_7 << 8;
+pub const DIAGONAL_9: u64 = DIAGONAL_8 << 8;
+pub const DIAGONAL_10: u64 = DIAGONAL_9 << 8;
+pub const DIAGONAL_11: u64 = DIAGONAL_10 << 8;
+pub const DIAGONAL_12: u64 = DIAGONAL_11 << 8;
+pub const DIAGONAL_13: u64 = DIAGONAL_12 << 8;
+pub const DIAGONAL_14: u64 = DIAGONAL_13 << 8;
+pub const DIAGONALS: [u64; 15] = 
+    [DIAGONAL_0, DIAGONAL_1, DIAGONAL_2, DIAGONAL_3, DIAGONAL_4, DIAGONAL_5, DIAGONAL_6, DIAGONAL_7, 
+     DIAGONAL_8, DIAGONAL_9, DIAGONAL_10, DIAGONAL_11, DIAGONAL_12, DIAGONAL_13, DIAGONAL_14];
 
+
+
+pub fn get_diagonal(index: u8) -> u64 {
+    let x = index % 8;
+    let y = index / 8;
+    return DIAGONALS[(y + 7 - x) as usize];
+}
+pub fn get_anti_diagonal(index: u8) -> u64 {
+    let x = index % 8;
+    let y = index / 8;
+    return ANTI_DIAGONALS[(y + x) as usize];
+}
 pub fn char_file(file: char) -> i8 {
     match file {
         'a' => 0,

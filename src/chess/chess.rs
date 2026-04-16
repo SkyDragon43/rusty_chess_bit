@@ -2,7 +2,7 @@ use std::{error::Error, fmt::Display, hint::black_box, string::ParseError};
 
 use regex::{Regex};
 
-use crate::chess::{constants::{file_char, index_from_string, rank_char}, piece::{ChessPiece, Team}};
+use crate::chess::{constants::{ANTI_DIAGONAL_0, ANTI_DIAGONALS, DIAGONAL_0, DIAGONALS, file_char, get_anti_diagonal, get_diagonal, index_from_string, rank_char}, piece::{ChessPiece, Team}};
 
 
 
@@ -287,7 +287,7 @@ impl ChessBoard {
 
     pub fn piece_array(&self) -> [ChessPiece; 64] {
         let mut arr = [ChessPiece::None; 64];
-
+        
         for i in 0..64 {
             let mask = 1 << i;
             if self.white.kings & mask != 0 {
