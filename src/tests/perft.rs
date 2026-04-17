@@ -1,7 +1,7 @@
 
 
 
-use regex::{Regex, bytes::Captures};
+use regex::Regex;
 
 use crate::{ChessBoard, tests::suite};
 

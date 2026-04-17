@@ -1,26 +1,9 @@
-use std::{arch::x86_64::_MM_FROUND_TO_ZERO, borrow::Borrow, collections::VecDeque, error::Error, fmt::Display, hint::black_box, path::Iter, pin, string::ParseError};
+use std::fmt::Display;
 
-use crossterm::{queue, style::Stylize, terminal::LeaveAlternateScreen};
+use crossterm::style::Stylize;
 use regex::{Regex};
 
-use crate::{castle::{self, CastleRights, CastleType}, chess::{constants::{ANTI_DIAGONAL_0, ANTI_DIAGONALS, DIAGONAL_0, DIAGONALS, FILE_A, FILE_B, FILE_F, FILE_G, FILE_H, RANK_1, RANK_2, RANK_3, RANK_4, RANK_6, RANK_7, RANK_8, file_char, get_anti_diagonal, get_diagonal, index_from_string, rank_char}, piece::{ChessPiece, Team}}, moves::{ChessMove, MoveType, PlayedMove}};
-
-
-
-fn index_coords(x: i8, y: i8) -> i8 {
-    if x < 0 || y < 0 || x > 7 || y > 7 {
-        return -1;
-    }
-    y * 8 + x
-}
-fn coord_mask(x: i8, y: i8) -> u64 {
-    if x < 0 || y < 0 || x > 7 || y > 7 {
-        return 0;
-    }
-    1u64 << x << (y * 8)
-}
-
-
+use crate::{castle::{self, CastleRights, CastleType}, chess::{constants::{FILE_A, FILE_B, FILE_G, FILE_H, RANK_1, RANK_2, RANK_3, RANK_6, RANK_7, RANK_8, file_char, index_from_string, rank_char}, piece::{ChessPiece, Team}}, moves::{ChessMove, MoveType, PlayedMove}};
 
 struct Pieces {
     pawns: u64,
@@ -1183,7 +1166,6 @@ impl ChessBoard {
         let mut capture_squares = pawn_knights;
 
         fn test_ray(ray: u64, attackers: u64, own: u64, capture_squares: &mut u64, pin_masks: &mut [u64; 64]) {
-            //println!("{} {}", ray, attackers);
             if ray & attackers != 0 {
                 let pinned = ray & own;
                 if pinned == 0 {
@@ -1227,15 +1209,6 @@ impl ChessBoard {
         capture_squares
     }
 
-    fn capture_mask(&self) -> u64 {
-        let pieces = self.team_pieces(self.active_team);
-        let king_bit = pieces.kings;
-
-        let mut pin_mask = [!0u64; 64];
-
-        let mut capture_mask = self.get_savior_mask(king_bit, self.active_team, &mut pin_mask);
-        capture_mask
-    }
     pub fn generate_moves(&self) -> Vec<ChessMove> {
         let mut moves = vec![];
 
@@ -1311,15 +1284,22 @@ impl Display for ChessBoard {
         let files = (0..8).enumerate();
         let files = Vec::from_iter(files);
 
+        
+        let last_played = self.played_moves.last();
+
+        let stars: u64 = match last_played {
+            Some(m) => {
+                1 << m.original.to | 1 << m.original.from
+            },
+            None => 0,
+        };
+
 
         let offset = " ";
 
         let file_on_bottom = false;
 
         let checks = self.threats_to_king(Team::Black) & self.black.kings | self.threats_to_king(Team::White) & self.white.kings;
-        let threats = self.threats_to_king(self.active_team);
-        let threats = self.capture_mask();
-
 
         let mut file_string = format!("{}  ", offset);
         for (_, file) in &files {
@@ -1338,11 +1318,19 @@ impl Display for ChessBoard {
             write!(f, "{}{} ", offset, rank_char(y))?;
 
             for (_, x) in &files {
+                
                 let index = y * 8 + x;
-                //let check = checks & 1 << index != 0;
-                let check = threats & 1<< index != 0;
-                let check = if check {"!".red()} else {" ".stylize()};
-                write!(f, "│{}{} ", check, pieces[index as usize])?
+                let notice = stars & 1 << index != 0;
+                let check = checks & 1 << index != 0;
+
+                let mut disp = ' '.stylize();
+                if notice {
+                    disp = '*'.dark_grey();
+                }
+                if check {
+                    disp = '!'.bold().red();
+                }
+                write!(f, "│{}{} ", disp, pieces[index as usize])?
             }
             write!(f, "│\n")?;
             if i < 8 - 1 {
@@ -1354,6 +1342,10 @@ impl Display for ChessBoard {
         if file_on_bottom {
             write!(f, "{}", file_string)?;
         }
+        write!(f, "{}  {:^33}\n", offset, match self.active_team {
+            Team::White => "White to move",
+            Team::Black => "Black to move",
+        }).unwrap();
         
 
         Ok(())

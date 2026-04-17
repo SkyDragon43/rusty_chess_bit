@@ -169,7 +169,7 @@ impl ChessPiece {
 
 impl Display for ChessPiece {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let dis = if (self.is_none()) {
+        let dis = if self.is_none() {
             ' '.stylize()
         } else {
             match self.team() {
