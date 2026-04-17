@@ -1,4 +1,4 @@
-use crate::{castle::{CastleRights, CastleType}, piece::ChessPiece};
+use crate::{ChessBoard, castle::{CastleRights, CastleType}, chess::constants, piece::ChessPiece};
 
 
 
@@ -37,5 +37,30 @@ impl ChessMove {
             to,
             move_type,
         }
+    }
+
+    pub fn name(&self) -> String {
+        if let MoveType::Castle(castle) = self.move_type {
+            if castle.is_kingside() {
+                return String::from("O-O");
+            } else {
+                return String::from("O-O-O");
+            }
+        }
+        let mut name = String::new();
+
+        let file = self.from % 8;
+        let rank = self.from / 8;
+        name.push(constants::file_char(file as i8));
+        name.push(constants::rank_char(rank as i8));
+        let file = self.to % 8;
+        let rank = self.to / 8;
+        name.push(constants::file_char(file as i8));
+        name.push(constants::rank_char(rank as i8));
+        if let MoveType::Promotion(promotion) = self.move_type {
+            name.push(promotion.char());
+        }
+
+        name
     }
 }

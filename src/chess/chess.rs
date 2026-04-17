@@ -1,8 +1,9 @@
-use std::{arch::x86_64::_MM_FROUND_TO_ZERO, collections::VecDeque, error::Error, fmt::Display, hint::black_box, path::Iter, string::ParseError};
+use std::{arch::x86_64::_MM_FROUND_TO_ZERO, borrow::Borrow, collections::VecDeque, error::Error, fmt::Display, hint::black_box, path::Iter, pin, string::ParseError};
 
+use crossterm::{queue, style::Stylize, terminal::LeaveAlternateScreen};
 use regex::{Regex};
 
-use crate::{castle::CastleRights, chess::{constants::{ANTI_DIAGONAL_0, ANTI_DIAGONALS, DIAGONAL_0, DIAGONALS, file_char, get_anti_diagonal, get_diagonal, index_from_string, rank_char}, piece::{ChessPiece, Team}}, moves::{ChessMove, PlayedMove}};
+use crate::{castle::{self, CastleRights, CastleType}, chess::{constants::{ANTI_DIAGONAL_0, ANTI_DIAGONALS, DIAGONAL_0, DIAGONALS, FILE_A, FILE_B, FILE_F, FILE_G, FILE_H, RANK_1, RANK_2, RANK_3, RANK_4, RANK_6, RANK_7, RANK_8, file_char, get_anti_diagonal, get_diagonal, index_from_string, rank_char}, piece::{ChessPiece, Team}}, moves::{ChessMove, MoveType, PlayedMove}};
 
 
 
@@ -318,7 +319,7 @@ impl ChessBoard {
         // self.fullmoves_count = 0;
         // self.halfmove_clock = 0;
         // self.move_stack = vec![];
-
+        let fen_string = fen_string.trim();
         let active_team : Team;
         let en_passant: u64;
         let castling: CastleRights;
@@ -442,6 +443,62 @@ impl ChessBoard {
         Ok(())
     }
 
+    pub fn to_fen(&self) -> String {
+        let mut rank_strings = vec![];
+        let data = self.piece_array();
+        for i in 0..8 {
+            let mut str = String::new();
+
+            let mut empty = 0;
+            for j in 0..8 {
+                let piece = data[i * 8 + j];
+                if piece.is_none() {
+                    empty += 1;
+                } else {
+                    if empty > 0 {
+                        str = str + &empty.to_string();
+                        empty = 0;
+                    }
+                    str = str + &piece.char().to_string();
+                }
+            }
+            if empty > 0 {
+                str = str + &empty.to_string();
+            }
+
+            rank_strings.push(str);
+        }
+        let mut fen_string = String::new();
+        for i in (0..8).rev() {
+            fen_string = fen_string + &rank_strings[i];
+            if i != 0 {
+                fen_string += "/";
+            }
+        }
+        fen_string += " ";
+        fen_string += match self.active_team {
+            Team::White => "w",
+            Team::Black => "b",
+        };
+        fen_string += " ";
+        fen_string += &self.castle.as_string();
+
+        fen_string += " ";
+
+        if self.en_passant != 0 {
+            let file = self.en_passant.trailing_zeros() % 8;
+            let rank = self.en_passant.trailing_zeros() / 8;
+            fen_string.push_str(&format!("{}{}",file_char(file as i8),rank_char(rank as i8)));
+        } else {
+            fen_string += "-";
+        }
+
+        fen_string += " ";
+        fen_string += &format!("{} {}", self.half_clock, self.full_count);
+
+        fen_string
+    }
+
     pub fn clear(&mut self) {
         self.all = 0;
         self.white.clear();
@@ -477,6 +534,13 @@ impl ChessBoard {
         }
     }
 
+    fn team_pieces(&self, team: Team) -> &Pieces {
+        match team {
+            Team::White => &self.white,
+            Team::Black => &self.black,
+        }
+    }
+
     pub fn play_move(&mut self, chess_move: ChessMove) -> &PlayedMove {
         
         let chess_piece = self.get_piece(chess_move.from);
@@ -485,6 +549,8 @@ impl ChessBoard {
         let previous_castle_rights = self.castle;
         let captured_piece: ChessPiece;
 
+        let mut half_move = true;
+
         match chess_move.move_type {
             super::moves::MoveType::Move => {
                 captured_piece = self.get_piece(chess_move.to);
@@ -492,6 +558,22 @@ impl ChessBoard {
 
                 self.set_piece(chess_piece, chess_move.to);
                 self.set_piece(ChessPiece::None, chess_move.from);
+
+                if chess_piece.is_king() {
+                    self.castle.set_team(chess_piece.team(), false);
+                }
+                if chess_move.from == 0 || chess_move.to == 0 {
+                    self.castle.set_queenside(Team::White, false);
+                } 
+                if chess_move.from == 7 || chess_move.to == 7 {
+                    self.castle.set_kingside(Team::White, false);
+                } 
+                if chess_move.from == 56 || chess_move.to == 56 {
+                    self.castle.set_queenside(Team::Black, false);
+                } 
+                if chess_move.from == 63 || chess_move.to == 63 {
+                    self.castle.set_kingside(Team::Black, false);
+                } 
             },
             super::moves::MoveType::Pawn(en_passant_square) => {
                 captured_piece = self.get_piece(chess_move.to);
@@ -500,9 +582,23 @@ impl ChessBoard {
                 } else {
                     self.en_passant = 0;
                 }
+                half_move = false;
 
                 self.set_piece(chess_piece, chess_move.to);
                 self.set_piece(ChessPiece::None, chess_move.from);
+
+                if chess_move.from == 0 || chess_move.to == 0 {
+                    self.castle.set_queenside(Team::White, false);
+                } 
+                if chess_move.from == 7 || chess_move.to == 7 {
+                    self.castle.set_kingside(Team::White, false);
+                } 
+                if chess_move.from == 56 || chess_move.to == 56 {
+                    self.castle.set_queenside(Team::Black, false);
+                } 
+                if chess_move.from == 63 || chess_move.to == 63 {
+                    self.castle.set_kingside(Team::Black, false);
+                } 
             },
             super::moves::MoveType::EnPassant(en_passant_capture) => {
                 captured_piece = self.get_piece(en_passant_capture);
@@ -518,9 +614,23 @@ impl ChessBoard {
 
                 self.set_piece(promotion_type, chess_move.to);
                 self.set_piece(ChessPiece::None, chess_move.from);
+
+                if chess_move.from == 0 || chess_move.to == 0 {
+                    self.castle.set_queenside(Team::White, false);
+                } 
+                if chess_move.from == 7 || chess_move.to == 7 {
+                    self.castle.set_kingside(Team::White, false);
+                } 
+                if chess_move.from == 56 || chess_move.to == 56 {
+                    self.castle.set_queenside(Team::Black, false);
+                } 
+                if chess_move.from == 63 || chess_move.to == 63 {
+                    self.castle.set_kingside(Team::Black, false);
+                } 
             },
             super::moves::MoveType::Castle(castle_type) => {
                 captured_piece = ChessPiece::None;
+                self.en_passant = 0;
 
                 let from_king = castle_type.get_king_index();
                 let to_king = castle_type.get_new_king_index();
@@ -538,6 +648,7 @@ impl ChessBoard {
                 self.castle.set_team(king.team(), false);
             },
         };
+
         let played = 
         PlayedMove::new(
             chess_move, 
@@ -546,6 +657,16 @@ impl ChessBoard {
             previous_castle_rights,
             previous_en_passant
         );
+
+        //Switch team
+        self.active_team = self.active_team.other();
+        if matches!(self.active_team, Team::White) {
+            self.full_count += 1;
+        }
+        half_move = half_move || !captured_piece.is_none();
+        if half_move {
+            //self.half_clock += 1;
+        }
         
         self.played_moves.push(played);
         self.played_moves.last().unwrap()
@@ -554,6 +675,11 @@ impl ChessBoard {
         let to_undo = self.played_moves.pop();
 
         if let Some(played) = &to_undo {
+            self.active_team = self.active_team.other();
+            if matches!(self.active_team, Team::Black) {
+                self.full_count -= 1;
+            }
+
             let original_move = &played.original;
             let chess_piece = played.piece;
             let captured_piece = played.captured;
@@ -599,6 +725,546 @@ impl ChessBoard {
         }
 
         to_undo
+    }
+
+
+    fn shift_team_pawn(&self, pawns: u64, shift: u8) -> u64 {
+        match self.active_team {
+            Team::White => {
+                pawns << shift
+            },
+            Team::Black => {
+                pawns >> (16 - shift)
+            },
+        }
+    }
+    fn is_pawn_unmoved(&self, pawn: u64) -> bool {
+        match self.active_team {
+            Team::White => pawn & RANK_2 != 0,
+            Team::Black => pawn & RANK_7 != 0,
+        }
+    }
+    fn is_promotion_square(&self, pawn: u64) -> bool {
+        match self.active_team {
+            Team::White => pawn & RANK_8 != 0,
+            Team::Black => pawn & RANK_1 != 0,
+        }
+    }
+
+    fn generate_pawn_moves(&self, moves: &mut Vec<ChessMove>, move_mask: u64, pin_masks: &[u64; 64]) {
+        let pawns = self.team_pieces(self.active_team).pawns;
+
+        fn add_promotion(board: &ChessBoard, moves: &mut Vec<ChessMove>, pawn: u64, from: u8, to: u8) -> bool {
+            if board.is_promotion_square(pawn) {
+                moves.push(ChessMove::new(from, to, MoveType::Promotion(ChessPiece::Bishop(board.active_team))));
+                moves.push(ChessMove::new(from, to, MoveType::Promotion(ChessPiece::Knight(board.active_team))));
+                moves.push(ChessMove::new(from, to, MoveType::Promotion(ChessPiece::Rook(board.active_team))));
+                moves.push(ChessMove::new(from, to, MoveType::Promotion(ChessPiece::Queen(board.active_team))));
+                return true;
+            }
+            false
+        }
+
+        for i in BoardIterator::index(pawns) {
+            let pawn_bit = 1 << i;
+            let push_one = self.shift_team_pawn(pawn_bit, 8) & !self.all;
+            
+            if push_one != 0 {
+                let move_mask = pin_masks[i] & move_mask;
+                {
+                    let push_one = push_one & move_mask;
+                    if push_one != 0 {
+                        if !add_promotion(self, moves, push_one, i as u8, push_one.trailing_zeros() as u8) {
+                            moves.push(ChessMove::new(i as u8, push_one.trailing_zeros() as u8, MoveType::Pawn(None)));
+                        }
+                    }
+                }
+                let push_two = self.shift_team_pawn(push_one, 8) & !self.all & move_mask;
+                if push_two != 0 && self.is_pawn_unmoved(pawn_bit) {
+                    moves.push(ChessMove::new(i as u8, push_two.trailing_zeros() as u8, MoveType::Pawn(Some(push_one.trailing_zeros() as u8))));
+                }
+            }
+
+            let capture_mask = self.team_pieces(self.active_team.other()).all | self.en_passant;
+            let move_mask = move_mask | self.shift_team_pawn(move_mask, 8) & self.en_passant;
+            let move_mask = pin_masks[i] & move_mask;
+            
+            let capture_right = self.shift_team_pawn(pawn_bit & !FILE_A, 7) & capture_mask & move_mask;
+            if capture_right != 0 {
+                let capture_right_index = capture_right.trailing_zeros() as u8;
+                if !add_promotion(self, moves, capture_right, i as u8, capture_right_index) {
+                    let en_passant = capture_right & self.en_passant != 0;
+                    if en_passant {
+                        
+                        moves.push(ChessMove::new(i as u8, capture_right_index, MoveType::EnPassant((i - 1) as u8)));
+                    } else {
+                        moves.push(ChessMove::new(i as u8, capture_right_index, MoveType::Move));
+                    }
+                }
+            }
+            let capture_left = self.shift_team_pawn(pawn_bit & !FILE_H, 9) & capture_mask & move_mask;
+            if capture_left != 0 {
+                let capture_index = capture_left.trailing_zeros() as u8;
+                if !add_promotion(self, moves, capture_left, i as u8, capture_index) {
+                    let en_passant = capture_left & self.en_passant != 0;
+                    if en_passant {
+                        moves.push(ChessMove::new(i as u8, capture_index, MoveType::EnPassant((i + 1) as u8)));
+                    } else {
+                        moves.push(ChessMove::new(i as u8, capture_index, MoveType::Move));
+                    }
+                    
+                }
+            }
+        }
+    }
+    
+    fn generate_knight_moves(&self, moves: &mut Vec<ChessMove>, move_mask: u64, pin_masks: &[u64; 64]) {
+        let pieces = self.team_pieces(self.active_team);
+        let knights = pieces.knights;
+        let all = pieces.all;
+        let spots = !all & move_mask;
+
+        let ab_mask = !(FILE_A | FILE_B);
+        let gh_mask = !(FILE_G | FILE_H);
+
+        fn add_move(moves: &mut Vec<ChessMove>, from: u8, to: u64) {
+            if to == 0 {
+                return;
+            }
+            moves.push(ChessMove::new(from, to.trailing_zeros() as u8, MoveType::Move));
+        }
+
+        for i in BoardIterator::index(knights) {
+            let spots = spots & pin_masks[i];
+            let knight_bit = 1 << i;
+
+            add_move(moves, i as u8, (knight_bit & !FILE_A) << 15 & spots);
+            add_move(moves, i as u8, (knight_bit & !FILE_A) >> 17 & spots);
+            add_move(moves, i as u8, (knight_bit & !FILE_H) << 17 & spots);
+            add_move(moves, i as u8, (knight_bit & !FILE_H) >> 15 & spots);
+            add_move(moves, i as u8, (knight_bit & ab_mask) << 6 & spots);
+            add_move(moves, i as u8, (knight_bit & ab_mask) >> 10 & spots);
+            add_move(moves, i as u8, (knight_bit & gh_mask) << 10 & spots);
+            add_move(moves, i as u8, (knight_bit & gh_mask) >> 6 & spots);
+        }
+    }
+
+    fn generate_ray_move_left(&self, moves: &mut Vec<ChessMove>, origin: u8, shift: u8, edge_mask: u64, team: u64, opponent: u64, move_mask: u64) {
+        let mut moved = 1 << origin;
+        for _ in 1..=7 {
+            moved &= edge_mask & !opponent;
+
+            moved = (moved << shift) & !team;
+
+            if moved == 0 {
+                break;
+            } else if moved & move_mask != 0 {
+                moves.push(ChessMove::new(origin, moved.trailing_zeros() as u8, MoveType::Move));
+            }
+        }
+    }
+    fn generate_ray_move_right(&self, moves: &mut Vec<ChessMove>, origin: u8, shift: u8, edge_mask: u64, team: u64, opponent: u64, move_mask: u64) {
+        let mut moved = 1 << origin;
+        for _ in 1..=7 {
+            moved &= edge_mask & !opponent;
+
+            moved = (moved >> shift) & !team;
+
+            if moved == 0 {
+                break;
+            } else if moved & move_mask != 0 {
+                moves.push(ChessMove::new(origin, moved.trailing_zeros() as u8, MoveType::Move));
+            }
+        }
+    }
+    
+    fn generate_rook_moves(&self, moves: &mut Vec<ChessMove>, move_mask: u64, pin_masks: &[u64; 64]) {
+        let pieces = self.team_pieces(self.active_team);
+        let rooks = pieces.rooks;
+        let team = pieces.all;
+        let enemy = self.team_pieces(self.active_team.other()).all;
+
+        for i in BoardIterator::index(rooks) {
+            let move_mask = move_mask & pin_masks[i];
+            self.generate_ray_move_left(moves, i as u8, 1, !FILE_H, team, enemy, move_mask);
+            self.generate_ray_move_right(moves, i as u8, 1, !FILE_A, team, enemy, move_mask);
+            self.generate_ray_move_left(moves, i as u8, 8, !0, team, enemy, move_mask);
+            self.generate_ray_move_right(moves, i as u8, 8, !0, team, enemy, move_mask);
+        }
+    }
+    fn generate_bishop_moves(&self, moves: &mut Vec<ChessMove>, move_mask: u64, pin_masks: &[u64; 64]) {
+        let pieces = self.team_pieces(self.active_team);
+        let bishops = pieces.bishops;
+        let team = pieces.all;
+        let enemy = self.team_pieces(self.active_team.other()).all;
+
+        for i in BoardIterator::index(bishops) {
+            let move_mask = move_mask & pin_masks[i];
+            self.generate_ray_move_left(moves, i as u8, 9, !FILE_H, team, enemy, move_mask);
+            self.generate_ray_move_right(moves, i as u8, 7, !FILE_H, team, enemy, move_mask);
+            self.generate_ray_move_left(moves, i as u8, 7, !FILE_A, team, enemy, move_mask);
+            self.generate_ray_move_right(moves, i as u8, 9, !FILE_A, team, enemy, move_mask);
+        }
+    }
+    fn generate_queen_moves(&self, moves: &mut Vec<ChessMove>, move_mask: u64, pin_masks: &[u64; 64]) {
+        let pieces = self.team_pieces(self.active_team);
+        let queens = pieces.queens;
+        let team = pieces.all;
+        let enemy = self.team_pieces(self.active_team.other()).all;
+
+        for i in BoardIterator::index(queens) {
+            let move_mask = move_mask & pin_masks[i];
+            self.generate_ray_move_left(moves, i as u8, 9, !FILE_H, team, enemy, move_mask);
+            self.generate_ray_move_right(moves, i as u8, 7, !FILE_H, team, enemy, move_mask);
+            self.generate_ray_move_left(moves, i as u8, 7, !FILE_A, team, enemy, move_mask);
+            self.generate_ray_move_right(moves, i as u8, 9, !FILE_A, team, enemy, move_mask);
+            self.generate_ray_move_left(moves, i as u8, 1, !FILE_H, team, enemy, move_mask);
+            self.generate_ray_move_right(moves, i as u8, 1, !FILE_A, team, enemy, move_mask);
+            self.generate_ray_move_left(moves, i as u8, 8, !0, team, enemy, move_mask);
+            self.generate_ray_move_right(moves, i as u8, 8, !0, team, enemy, move_mask);
+        }
+    }
+    fn generate_king_moves(&self, moves: &mut Vec<ChessMove>, threats: u64) {
+        let pieces = self.team_pieces(self.active_team);
+        let kings = pieces.kings;
+        let spots = !pieces.all & !threats;
+
+
+        if threats & kings == 0 {
+            if self.castle.get_kingside(self.active_team) {
+                let mask = match self.active_team {
+                    Team::White => castle::WHITE_KINGSIDE_EMPTY_MAKS,
+                    Team::Black => castle::BLACK_KINGSIDE_EMPTY_MAKS,
+                };
+                if self.all & mask == 0 && threats & mask == 0 {
+                    moves.push(ChessMove::new(0, 0, MoveType::Castle(CastleType::kingside_of(self.active_team))))
+                }
+            }
+            if self.castle.get_queenside(self.active_team) {
+                let mask = match self.active_team {
+                    Team::White => castle::WHITE_QUEENSIDE_EMPTY_MAKS,
+                    Team::Black => castle::BLACK_QUEENSIDE_EMPTY_MAKS,
+                };
+                let threat_mask = match self.active_team {
+                    Team::White => castle::WHITE_QUEENSIDE_THREAT_MASK,
+                    Team::Black => castle::BLACK_QUEENSIDE_THREAT_MASK,
+                };
+                if self.all & mask == 0 && threats & threat_mask == 0 {
+                    moves.push(ChessMove::new(0, 0, MoveType::Castle(CastleType::queenside_of(self.active_team))))
+                }
+            }
+        }
+
+        fn add_move(moves: &mut Vec<ChessMove>, from: u8, to: u64) {
+            if to == 0 {
+                return;
+            }
+            moves.push(ChessMove::new(from, to.trailing_zeros() as u8, MoveType::Move));
+        }
+
+        for i in BoardIterator::index(kings) {
+            let king_bit = 1 << i;
+
+            let king_moves = Self::king_threats(king_bit) & spots;
+            for j in BoardIterator::mask(king_moves) {
+                add_move(moves, i as u8, j);
+            }
+
+            
+            // add_move(moves, i as u8, (king_bit & !FILE_A) >> 1 & spots);
+            // add_move(moves, i as u8, (king_bit & !FILE_A) >> 9 & spots);
+            // add_move(moves, i as u8, (king_bit & !FILE_H) >> 1 & spots);
+            // add_move(moves, i as u8, (king_bit & !FILE_H) >> 9 & spots);
+            // add_move(moves, i as u8, (king_bit & !FILE_H) << 7 & spots);
+            // add_move(moves, i as u8, (king_bit) << 8 & spots);
+            // add_move(moves, i as u8, (king_bit) >> 8 & spots);
+        }
+    }
+    
+
+    fn pawn_threats(pawns: u64, team: Team) -> u64 {
+        match team {
+            Team::White => (pawns & !FILE_H) << 9 | (pawns & !FILE_A) << 7,
+            Team::Black => (pawns & !FILE_H) >> 7 | (pawns & !FILE_A) >> 9,
+        } 
+    }
+    fn knight_threats(knights: u64) -> u64 {
+        let ab_mask = !(FILE_A | FILE_B);
+        let gh_mask = !(FILE_G | FILE_H);
+
+        (knights & !FILE_A) << 15 |
+        (knights & !FILE_A) >> 17 |
+        (knights & !FILE_H) << 17 |
+        (knights & !FILE_H) >> 15 |
+        (knights & ab_mask) << 6 |
+        (knights & ab_mask) >> 10 |
+        (knights & gh_mask) << 10 |
+        (knights & gh_mask) >> 6
+    }
+    fn rook_threats(rooks: u64, all: u64) -> u64 {
+        let mut threats = 0;
+
+        let mut up = rooks;
+        let mut down = rooks;
+        let mut left = rooks;
+        let mut right = rooks;
+        for _ in 1..=7 {
+            left &= !FILE_A;
+            right &= !FILE_H;
+            
+
+            up >>= 8;
+            down <<= 8;
+            left >>= 1;
+            right <<= 1;
+
+            threats |= up | down | left | right;
+
+            left &= !all;
+            right &= !all;
+            up &= !all;
+            down &= !all;
+        }
+        threats
+    }
+    fn bishop_threats(bishops: u64, all: u64) -> u64 {
+        let mut threats = 0;
+
+        let mut up_left = bishops;
+        let mut up_right = bishops;
+        let mut down_left = bishops;
+        let mut down_right = bishops;
+        for _ in 1..=7 {
+            up_left &= !FILE_A;
+            down_left &= !FILE_A;
+            up_right &= !FILE_H;
+            down_right &= !FILE_H;
+            
+            up_left >>= 9;
+            down_left <<= 7;
+            up_right >>= 7;
+            down_right <<= 9;
+
+            threats |= up_left | down_left | up_right | down_right;
+
+            up_left &= !all;
+            down_left &= !all;
+            up_right &= !all;
+            down_right &= !all;
+        }
+        threats
+    }
+    fn queen_threats(queens: u64, all: u64) -> u64 {
+        let mut threats = 0;
+
+        let mut up = queens;
+        let mut down = queens;
+        let mut left = queens;
+        let mut right = queens;
+        let mut up_left = queens;
+        let mut up_right = queens;
+        let mut down_left = queens;
+        let mut down_right = queens;
+        for _ in 1..=7 {
+            left &= !FILE_A;
+            right &= !FILE_H;
+            up_left &= !FILE_A;
+            down_left &= !FILE_A;
+            up_right &= !FILE_H;
+            down_right &= !FILE_H;
+            
+            up >>= 8;
+            down <<= 8;
+            left >>= 1;
+            right <<= 1;
+            up_left >>= 9;
+            down_left <<= 7;
+            up_right >>= 7;
+            down_right <<= 9;
+
+            threats |= up | down | left | right;
+            threats |= up_left | down_left | up_right | down_right;
+
+            left &= !all;
+            right &= !all;
+            up &= !all;
+            down &= !all;
+            up_left &= !all;
+            down_left &= !all;
+            up_right &= !all;
+            down_right &= !all;
+        }
+        threats
+    }
+    fn king_threats(kings: u64) -> u64 {
+        (kings & !FILE_A) << 7 |
+        (kings & !FILE_A) >> 1 |
+        (kings & !FILE_A) >> 9 |
+        (kings & !FILE_H) << 1 |
+        (kings & !FILE_H) << 9 |
+        (kings & !FILE_H) >> 7 |
+        (kings) << 8 |
+        (kings) >> 8
+    }
+    fn threats_to_king(&self, team: Team) -> u64 {
+        let pieces = self.team_pieces(team);
+        let oposing = self.team_pieces(team.other());
+        let all_minus_king = self.all & !pieces.kings;
+
+        Self::pawn_threats(oposing.pawns, team.other()) |
+        Self::knight_threats(oposing.knights) |
+        Self::bishop_threats(oposing.bishops, all_minus_king) |
+        Self::rook_threats(oposing.rooks, all_minus_king) |
+        Self::queen_threats(oposing.queens, all_minus_king) |
+        Self::king_threats(oposing.kings)
+    }
+
+
+    fn get_savior_mask(&self, target: u64, team: Team, pin_masks: &mut [u64; 64]) -> u64 {
+        let oposing = self.team_pieces(team.other());
+        let own = self.team_pieces(team);
+        
+        let pawn_knights = 
+        Self::pawn_threats(target, team) & oposing.pawns | // gets diagonal pieces in front of the piece
+        Self::knight_threats(target) & oposing.knights;
+
+        let en_passant_pawn = match team {
+            Team::Black => (RANK_3 & self.en_passant) << 8 & oposing.pawns,
+            Team::White => (RANK_6 & self.en_passant) >> 8 & oposing.pawns,
+        };
+        let oposing_minus_enpassant_pawn = oposing.all & !en_passant_pawn;
+
+        let rooks = oposing.rooks | oposing.queens;
+        let bishops = oposing.bishops | oposing.queens;
+
+        let mut up = target;
+        let mut down = target;
+        let mut left = target;
+        let mut right = target;
+        let mut up_left = target;
+        let mut up_right = target;
+        let mut down_left = target;
+        let mut down_right = target;
+        for _ in 1..=7 {
+            left &= !FILE_A;
+            right &= !FILE_H;
+            up_left &= !FILE_A;
+            down_left &= !FILE_A;
+            up_right &= !FILE_H;
+            down_right &= !FILE_H;
+
+            left &= !oposing_minus_enpassant_pawn;
+            right &= !oposing_minus_enpassant_pawn;
+            up &= !oposing.all;
+            down &= !oposing.all;
+            up_left &= !oposing.all;
+            down_left &= !oposing.all;
+            up_right &= !oposing.all;
+            down_right &= !oposing.all;
+            
+            up |= up >> 8;
+            down |= down << 8;
+            left |= left >> 1;
+            right |= right << 1;
+            up_left |= up_left >> 9;
+            down_left |= down_left << 7;
+            up_right |= up_right >> 7;
+            down_right |= down_right << 9;
+        }
+        up &= !target;
+        down &= !target;
+        left &= !target;
+        right &= !target;
+        up_left &= !target;
+        up_right &= !target;
+        down_left &= !target;
+        down_right &= !target;
+
+        let mut capture_squares = pawn_knights;
+
+        fn test_ray(ray: u64, attackers: u64, own: u64, capture_squares: &mut u64, pin_masks: &mut [u64; 64]) {
+            //println!("{} {}", ray, attackers);
+            if ray & attackers != 0 {
+                let pinned = ray & own;
+                if pinned == 0 {
+                    *capture_squares |= ray;
+                } else if pinned.count_ones() == 1 {
+                    pin_masks[pinned.trailing_zeros() as usize] = ray;
+                }
+            }
+        }
+        fn test_ray_with_ep(ray: u64, attackers: u64, own: u64, own_pawns: u64, en_passant: u64, team: Team, capture_squares: &mut u64, pin_masks: &mut [u64; 64]) {
+            if ray & attackers != 0 {
+                let pinned = ray & own;
+                if pinned == 0 {
+                    *capture_squares |= ray;
+                } else if pinned.count_ones() == 1 {
+                    if en_passant != 0 && pinned & own_pawns != 0  {
+                        if ChessBoard::pawn_threats(pinned, team) & en_passant != 0 {
+                            pin_masks[pinned.trailing_zeros() as usize] = !en_passant;
+                        }
+                    } else {
+                        pin_masks[pinned.trailing_zeros() as usize] = ray;
+                    }
+                }
+            }
+        }
+
+        test_ray_with_ep(left, rooks, own.all, own.pawns, self.en_passant, team, &mut capture_squares, pin_masks);
+        test_ray_with_ep(right, rooks, own.all, own.pawns, self.en_passant, team, &mut capture_squares, pin_masks);
+        test_ray(up, rooks, own.all, &mut capture_squares, pin_masks);
+        test_ray(down, rooks, own.all, &mut capture_squares, pin_masks);
+        test_ray(up_left, bishops, own.all, &mut capture_squares, pin_masks);
+        test_ray(up_right, bishops, own.all, &mut capture_squares, pin_masks);
+        test_ray(down_left, bishops, own.all, &mut capture_squares, pin_masks);
+        test_ray(down_right, bishops, own.all, &mut capture_squares, pin_masks);
+
+        let attackers = capture_squares & oposing.all;
+        if attackers.count_ones() > 1 {
+            // The king must move to beable to escape
+            return 0;
+        }
+        capture_squares
+    }
+
+    fn capture_mask(&self) -> u64 {
+        let pieces = self.team_pieces(self.active_team);
+        let king_bit = pieces.kings;
+
+        let mut pin_mask = [!0u64; 64];
+
+        let mut capture_mask = self.get_savior_mask(king_bit, self.active_team, &mut pin_mask);
+        capture_mask
+    }
+    pub fn generate_moves(&self) -> Vec<ChessMove> {
+        let mut moves = vec![];
+
+        let threats = self.threats_to_king(self.active_team);
+        let pieces = self.team_pieces(self.active_team);
+
+        let king_bit = pieces.kings;
+
+        let mut pin_mask = [!0u64; 64];
+
+        let mut capture_mask = self.get_savior_mask(king_bit, self.active_team, &mut pin_mask);
+
+        if king_bit & threats == 0 {
+            capture_mask = !0;
+        }
+
+        {
+            let moves = &mut moves;
+            if capture_mask != 0 {
+                self.generate_pawn_moves(moves, capture_mask, &pin_mask);
+                self.generate_knight_moves(moves, capture_mask, &pin_mask);
+                self.generate_rook_moves(moves, capture_mask, &pin_mask);
+                self.generate_bishop_moves(moves, capture_mask, &pin_mask);
+                self.generate_queen_moves(moves, capture_mask, &pin_mask);
+            }
+            self.generate_king_moves(moves, threats);
+        }
+        
+        moves
     }
 
     pub fn piece_array(&self) -> [ChessPiece; 64] {
@@ -650,6 +1316,10 @@ impl Display for ChessBoard {
 
         let file_on_bottom = false;
 
+        let checks = self.threats_to_king(Team::Black) & self.black.kings | self.threats_to_king(Team::White) & self.white.kings;
+        let threats = self.threats_to_king(self.active_team);
+        let threats = self.capture_mask();
+
 
         let mut file_string = format!("{}  ", offset);
         for (_, file) in &files {
@@ -669,7 +1339,10 @@ impl Display for ChessBoard {
 
             for (_, x) in &files {
                 let index = y * 8 + x;
-                write!(f, "│ {} ", pieces[index as usize])?
+                //let check = checks & 1 << index != 0;
+                let check = threats & 1<< index != 0;
+                let check = if check {"!".red()} else {" ".stylize()};
+                write!(f, "│{}{} ", check, pieces[index as usize])?
             }
             write!(f, "│\n")?;
             if i < 8 - 1 {

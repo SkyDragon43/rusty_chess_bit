@@ -10,3 +10,10 @@ mod chess {
 
 
 pub use chess::*;
+
+
+#[cfg(test)]
+mod tests {
+    mod perft;
+    pub mod suite;
+}

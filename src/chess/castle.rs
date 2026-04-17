@@ -1,10 +1,18 @@
-use crate::piece::Team;
+use crate::{chess::constants::{FILE_B, FILE_C, FILE_D, FILE_F, FILE_G, RANK_1, RANK_8}, piece::Team};
 
 
 pub const WHITE_KINGSIDE: u8 = 0b0001;
 pub const WHITE_QUEENSIDE: u8 = 0b0010;
 pub const BLACK_KINGSIDE: u8 = 0b0100;
 pub const BLACK_QUEENSIDE: u8 = 0b1000;
+
+pub const BLACK_KINGSIDE_EMPTY_MAKS: u64 = (FILE_F | FILE_G) & RANK_8;
+pub const BLACK_QUEENSIDE_EMPTY_MAKS: u64 = (FILE_B | FILE_C | FILE_D) & RANK_8;
+pub const WHITE_KINGSIDE_EMPTY_MAKS: u64 = (FILE_F | FILE_G) & RANK_1;
+pub const WHITE_QUEENSIDE_EMPTY_MAKS: u64 = (FILE_B | FILE_C | FILE_D) & RANK_1;
+
+pub const WHITE_QUEENSIDE_THREAT_MASK: u64 = (FILE_C | FILE_D) & RANK_1;
+pub const BLACK_QUEENSIDE_THREAT_MASK: u64 = (FILE_C | FILE_D) & RANK_8;
 
 #[derive(Clone, Copy, Debug)]
 pub enum CastleType {

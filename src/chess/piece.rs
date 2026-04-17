@@ -9,6 +9,15 @@ pub enum Team {
     Black
 }
 
+impl Team {
+    pub fn other(&self) -> Team {
+        match self {
+            Team::White => Team::Black,
+            Team::Black => Team::White,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum ChessPiece {
     None,
