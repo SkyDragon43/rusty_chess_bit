@@ -1,6 +1,6 @@
-use std::{alloc::System, env, io::{Read, stdin, stdout}, process::{ExitCode, ExitStatus}, thread::sleep, time::Duration};
+use std::{alloc::System, env, io::{Read, Write, stdin, stdout}, process::{ExitCode, ExitStatus}, thread::sleep, time::Duration};
 
-use crossterm::{cursor::{MoveRight, MoveTo}, event::{self, Event, MouseEvent}, execute, style::Print, terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen}};
+use crossterm::{cursor::{Hide, MoveRight, MoveTo, Show}, event::{self, Event, KeyCode, MouseEvent, read}, execute, style::Print, terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen}};
 use rand::random_range;
 use rusty_chess_bit::ChessBoard;
 
@@ -26,6 +26,51 @@ fn update_chess(board: &ChessBoard, messages: &str) {
 
     execute!(stdout(), MoveTo(0, 0)).unwrap();
     print!("{}", board);
+}
+
+fn interactive(chess: &mut ChessBoard) -> Result<(), Box<dyn std::error::Error>> {
+    let mut message = String::new();
+
+
+    let mut x: i8 = 0;
+    let mut y: i8 = 0;
+    execute!(stdout(), Hide).unwrap();
+    'main: loop {
+        update_chess(&chess, &message);
+        if x >= 0 && x < 8 && y >= 0 && y < 8 {
+            execute!(stdout(), MoveTo((x * 4 + 5) as u16, (y * 2 + 3) as u16)).unwrap();
+            println!("*");
+        }
+        message.clear();
+
+        if let Event::Key(key_event) = read()? {
+            if key_event.is_press() || key_event.is_repeat() {
+                match key_event.code {
+                    KeyCode::Char('q') => break 'main,
+                    KeyCode::Up => y -= 1,
+                    KeyCode::Down => y += 1,
+                    KeyCode::Left => x -= 1,
+                    KeyCode::Right => x += 1,
+                    _ => (),
+                }
+                if x >= 8 {
+                    x = 7
+                }
+                if y >= 8 {
+                    y = 7
+                }
+                if x < 0 {
+                    x = 0
+                }
+                if y < 0 {
+                    y = 0
+                }
+            }
+        }
+        
+    }
+    execute!(stdout(), Show).unwrap();
+    Ok(())
 }
 fn main() -> Result<(), Box<dyn std::error::Error>>{
     unsafe { env::set_var("RUST_BACKTRACE", "full") };
@@ -93,6 +138,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
                     sleep(Duration::from_millis(10));
                 }
                 message.push_str("Board reset.");
+            } else if arguments[0].eq("interactive") {
+                interactive(&mut chess)?;
             } else {
                 let m = arguments.get(0).unwrap();
                 moves.retain(|f| {
